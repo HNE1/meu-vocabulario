@@ -1,0 +1,144 @@
+[
+  {
+    "id": 1,
+    "word": "fazer",
+    "translation": "做",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "faço",
+      "tu": "fazes",
+      "ele/ela/você": "faz",
+      "nós": "fazemos",
+      "eles/elas/vocês": "fazem"
+    },
+    "example": {
+      "pt": "Eu faço o café todos os dias.",
+      "zh": "我每天做咖啡。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 2,
+    "word": "ir",
+    "translation": "去",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "vou",
+      "tu": "vais",
+      "ele/ela/você": "vai",
+      "nós": "vamos",
+      "eles/elas/vocês": "vão"
+    },
+    "example": {
+      "pt": "Ela vai ao mercado.",
+      "zh": "她去市场。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 3,
+    "word": "estar",
+    "translation": "在",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "estou",
+      "tu": "estás",
+      "ele/ela/você": "está",
+      "nós": "estamos",
+      "eles/elas/vocês": "estão"
+    },
+    "example": {
+      "pt": "Onde você está?",
+      "zh": "你在哪里？"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 4,
+    "word": "ser",
+    "translation": "是",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "sou",
+      "tu": "és",
+      "ele/ela/você": "é",
+      "nós": "somos",
+      "eles/elas/vocês": "são"
+    },
+    "example": {
+      "pt": "Eu sou estudante.",
+      "zh": "我是学生。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 5,
+    "word": "ter",
+    "translation": "有",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "tenho",
+      "tu": "tens",
+      "ele/ela/você": "tem",
+      "nós": "temos",
+      "eles/elas/vocês": "têm"
+    },
+    "example": {
+      "pt": "Tenho três irmãos.",
+      "zh": "我有三个兄弟姐妹。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 6,
+    "word": "água",
+    "translation": "水",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Preciso de água.",
+      "zh": "我需要水。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 7,
+    "word": "livro",
+    "translation": "书",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Este livro é interessante.",
+      "zh": "这本书很有意思。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 8,
+    "word": "casa",
+    "translation": "家",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "A casa é grande.",
+      "zh": "房子很大。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  }
+]
