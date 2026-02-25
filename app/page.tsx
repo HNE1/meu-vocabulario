@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import wordsData from "@/data/words.json";
-
-const STORAGE_KEY = "portuguese_words_data";
+import { supabase } from "@/lib/supabase";
 
 type TabType = "study" | "library" | "settings";
 
@@ -20,7 +18,17 @@ type WordItem = {
   nextReviewDate: string;
 };
 
-type RawWordItem = Omit<WordItem, "nextReviewDate"> & { nextReviewDate?: string };
+/** Supabase words 表返回的原始行（snake_case） */
+type SupabaseWordRow = {
+  id: number;
+  word: string;
+  translation: string;
+  is_verb: boolean;
+  conjugations: Record<string, string> | null;
+  interval: number;
+  ease_factor: number;
+  next_review_date: string;
+};
 
 const CONJUGATION_KEYS = ["eu", "ele/ela/você", "nós", "eles/elas/vocês"] as const;
 
@@ -46,14 +54,20 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function initWordsFromJson(): WordItem[] {
-  const today = getTodayStr();
-  return (wordsData as RawWordItem[]).map((w) => ({
-    ...w,
-    interval: 0,
-    easeFactor: 2.5,
-    nextReviewDate: w.nextReviewDate ?? today,
-  }));
+function mapRowToWordItem(row: SupabaseWordRow): WordItem {
+  const nextReviewDate =
+    row.next_review_date ?? getTodayStr();
+  return {
+    id: row.id,
+    word: row.word,
+    translation: row.translation,
+    isVerb: row.is_verb,
+    isIrregular: row.is_verb && row.conjugations != null,
+    conjugations: row.conjugations,
+    interval: row.interval ?? 0,
+    easeFactor: row.ease_factor ?? 2.5,
+    nextReviewDate: typeof nextReviewDate === "string" ? nextReviewDate : getTodayStr(),
+  };
 }
 
 function applySM2(word: WordItem, rating: "hard" | "good" | "easy"): WordItem {
@@ -77,16 +91,10 @@ function applySM2(word: WordItem, rating: "hard" | "good" | "easy"): WordItem {
   return { ...word, interval, easeFactor, nextReviewDate };
 }
 
-function saveToStorage(words: WordItem[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(words));
-  } catch {
-    // ignore quota / private mode errors
-  }
-}
-
 export default function Page() {
   const [words, setWords] = useState<WordItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("study");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [dailyNew, setDailyNew] = useState(15);
@@ -96,30 +104,31 @@ export default function Page() {
   const [showExample, setShowExample] = useState(false);
   const [expandedWordId, setExpandedWordId] = useState<number | null>(null);
   const [familiarity, setFamiliarity] = useState<Record<number, number>>({});
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as RawWordItem[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const today = getTodayStr();
-          const normalized: WordItem[] = parsed.map((w) => ({
-            ...w,
-            interval: w.interval ?? 0,
-            easeFactor: w.easeFactor ?? 2.5,
-            nextReviewDate: w.nextReviewDate ?? today,
-          }));
-          setWords(normalized);
-          return;
-        }
-      } catch {
-        // invalid JSON, fall through to init
+    async function fetchWords() {
+      setLoading(true);
+      setError(null);
+      const { data, error: err } = await supabase
+        .from("words")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (err) {
+        setError(err.message ?? "获取词库失败");
+        setWords([]);
+      } else if (data && Array.isArray(data)) {
+        setWords(
+          (data as SupabaseWordRow[]).map(mapRowToWordItem)
+        );
+      } else {
+        setWords([]);
       }
+      setLoading(false);
     }
-    const initial = initWordsFromJson();
-    setWords(initial);
-    saveToStorage(initial);
+
+    fetchWords();
   }, []);
 
   const today = getTodayStr();
@@ -142,19 +151,36 @@ export default function Page() {
     : "bg-white border-gray-200";
 
   const handleRate = useCallback(
-    (rating: "hard" | "good" | "easy") => {
+    async (rating: "hard" | "good" | "easy") => {
       if (!currentWord || !words) return;
+
       const updated = applySM2(currentWord, rating);
-      const nextWords = words.map((w) =>
-        w.id === updated.id ? updated : w
-      );
-      setWords(nextWords);
-      saveToStorage(nextWords);
+      setUpdatingId(currentWord.id);
+
+      const { error: updateErr } = await supabase
+        .from("words")
+        .update({
+          interval: updated.interval,
+          ease_factor: updated.easeFactor,
+          next_review_date: updated.nextReviewDate,
+        })
+        .eq("id", currentWord.id);
+
+      if (updateErr) {
+        setError(updateErr.message ?? "同步失败");
+      } else {
+        setWords((prev) =>
+          prev ? prev.map((w) => (w.id === updated.id ? updated : w)) : []
+        );
+      }
+
+      setUpdatingId(null);
       setFamiliarity((prev) => ({
         ...prev,
         [currentWord.id]: Math.min(
           3,
-          (prev[currentWord.id] ?? 0) + (rating === "hard" ? 0 : rating === "good" ? 1 : 2)
+          (prev[currentWord.id] ?? 0) +
+            (rating === "hard" ? 0 : rating === "good" ? 1 : 2)
         ),
       }));
       setIsRevealed(true);
@@ -172,12 +198,22 @@ export default function Page() {
 
   const getFamiliarity = (id: number) => familiarity[id] ?? 0;
 
-  if (words === null) {
+  if (loading) {
     return (
       <div
-        className={`min-h-screen max-w-md mx-auto flex items-center justify-center ${baseClasses}`}
+        className={`min-h-screen max-w-md mx-auto flex flex-col items-center justify-center ${baseClasses}`}
       >
         <p className="text-gray-500 dark:text-gray-400">加载中...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className={`min-h-screen max-w-md mx-auto flex flex-col items-center justify-center p-6 ${baseClasses}`}
+      >
+        <p className="text-red-500 dark:text-red-400 text-center">{error}</p>
       </div>
     );
   }
@@ -212,12 +248,13 @@ export default function Page() {
             onToggleExample={() => setShowExample((p) => !p)}
             cardClasses={cardClasses}
             isDarkMode={isDarkMode}
+            isUpdating={updatingId === currentWord?.id}
           />
         )}
 
         {activeTab === "library" && (
           <LibraryView
-            words={words}
+            words={words ?? []}
             expandedWordId={expandedWordId}
             onExpand={setExpandedWordId}
             familiarity={familiarity}
@@ -278,6 +315,7 @@ function StudyView({
   onToggleExample,
   cardClasses,
   isDarkMode,
+  isUpdating,
 }: {
   dailyNew: number;
   dailyReview: number;
@@ -285,11 +323,12 @@ function StudyView({
   isCompleted: boolean;
   isRevealed: boolean;
   showExample: boolean;
-  onRate: (rating: "hard" | "good" | "easy") => void;
+  onRate: (rating: "hard" | "good" | "easy") => void | Promise<void>;
   onNext: () => void;
   onToggleExample: () => void;
   cardClasses: string;
   isDarkMode: boolean;
+  isUpdating?: boolean;
 }) {
   const translationText = isDarkMode ? "text-gray-100" : "text-gray-900";
 
@@ -427,21 +466,24 @@ function StudyView({
               <button
                 type="button"
                 onClick={() => onRate("hard")}
-                className="flex-1 h-14 min-h-[44px] bg-red-500 text-white rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-red-600 shadow-lg shadow-red-500/25"
+                disabled={isUpdating}
+                className="flex-1 h-14 min-h-[44px] bg-red-500 text-white rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-red-600 shadow-lg shadow-red-500/25 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                不认识
+                {isUpdating ? "同步中..." : "不认识"}
               </button>
               <button
                 type="button"
                 onClick={() => onRate("good")}
-                className="flex-1 h-14 min-h-[44px] bg-amber-400 text-gray-800 rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-amber-500 shadow-lg shadow-amber-400/25"
+                disabled={isUpdating}
+                className="flex-1 h-14 min-h-[44px] bg-amber-400 text-gray-800 rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-amber-500 shadow-lg shadow-amber-400/25 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 模糊
               </button>
               <button
                 type="button"
                 onClick={() => onRate("easy")}
-                className="flex-1 h-14 min-h-[44px] bg-emerald-500 text-white rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25"
+                disabled={isUpdating}
+                className="flex-1 h-14 min-h-[44px] bg-emerald-500 text-white rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 认识
               </button>
@@ -498,7 +540,9 @@ function LibraryView({
                   : undefined
               }
               className={`w-full ${itemBg} rounded-2xl p-4 flex items-center justify-between text-left border ${itemBorder} transition-all duration-200 active:scale-[0.99] ${
-                word.isVerb && word.isIrregular ? "cursor-pointer" : "cursor-default"
+                word.isVerb && word.isIrregular
+                  ? "cursor-pointer"
+                  : "cursor-default"
               }`}
             >
               <div className="flex flex-col items-start gap-1">
@@ -520,7 +564,8 @@ function LibraryView({
                   </span>
                 </div>
                 <span className={`text-[10px] ${debugColor} mt-0.5`}>
-                  [间隔: {word.interval}天 | 简易度: {word.easeFactor.toFixed(1)} | 下次: {word.nextReviewDate}]
+                  [间隔: {word.interval}天 | 简易度:{" "}
+                  {word.easeFactor.toFixed(1)} | 下次: {word.nextReviewDate}]
                 </span>
               </div>
               <span
@@ -540,27 +585,24 @@ function LibraryView({
                   } border ${itemBorder} transition-all duration-200`}
                 >
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    {CONJUGATION_KEYS.filter((k) => k in word.conjugations!).map(
-                      (key) => (
-                        <div
-                          key={key}
-                          className="flex justify-between"
+                    {CONJUGATION_KEYS.filter(
+                      (k) => k in word.conjugations!
+                    ).map((key) => (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {key}:
+                        </span>
+                        <span
+                          className={
+                            isDarkMode
+                              ? "text-gray-200 font-medium"
+                              : "text-gray-800 font-medium"
+                          }
                         >
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {key}:
-                          </span>
-                          <span
-                            className={
-                              isDarkMode
-                                ? "text-gray-200 font-medium"
-                                : "text-gray-800 font-medium"
-                            }
-                          >
-                            {word.conjugations![key]}
-                          </span>
-                        </div>
-                      )
-                    )}
+                          {word.conjugations![key]}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -641,10 +683,9 @@ function SettingsView({
       <div
         className={`rounded-2xl p-4 border ${panelBg} ${panelBorder} transition-colors duration-300`}
       >
-        <p className="text-sm font-medium mb-2">词库拓展</p>
+        <p className="text-sm font-medium mb-2">词库来源</p>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          编辑 <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">data/words.json</code> 添加新词，格式参考{" "}
-          <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">data/WORDS_FORMAT.md</code>
+          词库数据来自 Supabase 云端 <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">words</code> 表
         </p>
       </div>
     </div>
