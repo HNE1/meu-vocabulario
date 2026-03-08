@@ -232,6 +232,7 @@ export default function Page() {
       const { data, error: err } = await supabase
         .from("words")
         .select("*")
+        .limit(1000)
         .order("id", { ascending: true });
 
       if (err) {
@@ -764,8 +765,8 @@ function SettingsView({
   const Stepper = ({
     value,
     onChange,
-    min = 5,
-    max = 100,
+    min = 10,
+    max = 1000,
     label,
   }: {
     value: number;
