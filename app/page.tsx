@@ -28,21 +28,71 @@ type SupabaseWordRow = {
   interval: number;
   ease_factor: number;
   next_review_date: string;
+  example?: { pt: string; zh: string } | null;
 };
 
 const CONJUGATION_KEYS = ["eu", "ele/ela/você", "nós", "eles/elas/vocês"] as const;
-
-const FAMILIARITY_LABELS = ["陌生", "模糊", "熟悉", "掌握"] as const;
-const FAMILIARITY_COLORS = {
-  light: ["bg-red-100 text-red-700", "bg-amber-100 text-amber-700", "bg-emerald-100 text-emerald-700", "bg-blue-100 text-blue-700"],
-  dark: ["bg-red-900/40 text-red-300", "bg-amber-900/40 text-amber-300", "bg-emerald-900/40 text-emerald-300", "bg-blue-900/40 text-blue-300"],
-};
 
 const TAB_TITLES: Record<TabType, string> = {
   study: "背词",
   library: "词库",
   settings: "设置",
 };
+
+const STORAGE_KEYS = {
+  settings: "flashcard-settings",
+  dailyStats: "flashcard-daily-stats",
+} as const;
+
+type StoredSettings = { dailyNew: number; dailyReview: number; isDarkMode: boolean };
+type DailyStats = { learnedCount: number; reviewedCount: number };
+
+function loadSettings(): StoredSettings {
+  if (typeof window === "undefined") return { dailyNew: 15, dailyReview: 30, isDarkMode: false };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.settings);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<StoredSettings>;
+      return {
+        dailyNew: Math.max(5, Math.min(100, parsed.dailyNew ?? 15)),
+        dailyReview: Math.max(5, Math.min(200, parsed.dailyReview ?? 30)),
+        isDarkMode: !!parsed.isDarkMode,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return { dailyNew: 15, dailyReview: 30, isDarkMode: false };
+}
+
+function saveSettings(s: StoredSettings) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(s));
+  } catch {
+    // ignore
+  }
+}
+
+function loadDailyStats(today: string): DailyStats {
+  if (typeof window === "undefined") return { learnedCount: 0, reviewedCount: 0 };
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEYS.dailyStats}-${today}`);
+    if (raw) return JSON.parse(raw) as DailyStats;
+  } catch {
+    // ignore
+  }
+  return { learnedCount: 0, reviewedCount: 0 };
+}
+
+function saveDailyStats(today: string, stats: DailyStats) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`${STORAGE_KEYS.dailyStats}-${today}`, JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
 
 function getTodayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -55,8 +105,7 @@ function addDays(dateStr: string, days: number): string {
 }
 
 function mapRowToWordItem(row: SupabaseWordRow): WordItem {
-  const nextReviewDate =
-    row.next_review_date ?? getTodayStr();
+  const nextReviewDate = row.next_review_date ?? getTodayStr();
   return {
     id: row.id,
     word: row.word,
@@ -64,6 +113,7 @@ function mapRowToWordItem(row: SupabaseWordRow): WordItem {
     isVerb: row.is_verb,
     isIrregular: row.is_verb && row.conjugations != null,
     conjugations: row.conjugations,
+    example: row.example ?? undefined,
     interval: row.interval ?? 0,
     easeFactor: row.ease_factor ?? 2.5,
     nextReviewDate: typeof nextReviewDate === "string" ? nextReviewDate : getTodayStr(),
@@ -99,12 +149,21 @@ export default function Page() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [dailyNew, setDailyNew] = useState(15);
   const [dailyReview, setDailyReview] = useState(30);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
-  const [showExample, setShowExample] = useState(false);
   const [expandedWordId, setExpandedWordId] = useState<number | null>(null);
-  const [familiarity, setFamiliarity] = useState<Record<number, number>>({});
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [dailyStats, setDailyStats] = useState<DailyStats>({ learnedCount: 0, reviewedCount: 0 });
+
+  useEffect(() => {
+    const s = loadSettings();
+    setDailyNew(s.dailyNew);
+    setDailyReview(s.dailyReview);
+    setIsDarkMode(s.isDarkMode);
+  }, []);
+
+  useEffect(() => {
+    setDailyStats(loadDailyStats(getTodayStr()));
+  }, []);
 
   useEffect(() => {
     async function fetchWords() {
@@ -132,11 +191,24 @@ export default function Page() {
   }, []);
 
   const today = getTodayStr();
-  const studyQueue = words
-    ? words.filter((w) => w.nextReviewDate <= today)
+  const stats = dailyStats;
+
+  const dueReviews = words
+    ? words.filter((w) => w.interval > 0 && w.nextReviewDate <= today)
     : [];
-  const currentWord = studyQueue[currentIndex];
+  const newWords = words
+    ? words.filter((w) => w.interval === 0)
+    : [];
+
+  const reviewSlice = dueReviews.slice(0, Math.max(0, dailyReview - stats.reviewedCount));
+  const newSlice = newWords.slice(0, Math.max(0, dailyNew - stats.learnedCount));
+  const studyQueue = [...reviewSlice, ...newSlice];
+  const currentWord = studyQueue[0];
   const isCompleted = studyQueue.length === 0;
+
+  useEffect(() => {
+    setIsRevealed(false);
+  }, [currentWord?.id]);
 
   const baseClasses = isDarkMode
     ? "bg-gray-900 text-gray-100 transition-colors duration-300"
@@ -154,6 +226,7 @@ export default function Page() {
     async (rating: "hard" | "good" | "easy") => {
       if (!currentWord || !words) return;
 
+      const wasNew = currentWord.interval === 0;
       const updated = applySM2(currentWord, rating);
       setUpdatingId(currentWord.id);
 
@@ -172,31 +245,42 @@ export default function Page() {
         setWords((prev) =>
           prev ? prev.map((w) => (w.id === updated.id ? updated : w)) : []
         );
+        const nextStats = wasNew
+          ? { ...stats, learnedCount: stats.learnedCount + 1 }
+          : { ...stats, reviewedCount: stats.reviewedCount + 1 };
+        setDailyStats(nextStats);
+        saveDailyStats(getTodayStr(), nextStats);
       }
 
       setUpdatingId(null);
-      setFamiliarity((prev) => ({
-        ...prev,
-        [currentWord.id]: Math.min(
-          3,
-          (prev[currentWord.id] ?? 0) +
-            (rating === "hard" ? 0 : rating === "good" ? 1 : 2)
-        ),
-      }));
       setIsRevealed(true);
-      setShowExample(false);
     },
-    [currentWord, words]
+    [currentWord, words, stats]
   );
 
-  const handleNext = useCallback(() => {
-    setIsRevealed(false);
-    setShowExample(false);
-  }, []);
+  const toggleTheme = useCallback(() => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      saveSettings({ dailyNew, dailyReview, isDarkMode: next });
+      return next;
+    });
+  }, [dailyNew, dailyReview, isDarkMode]);
 
-  const toggleTheme = () => setIsDarkMode((prev) => !prev);
+  const handleDailyNewChange = useCallback(
+    (v: number) => {
+      setDailyNew(v);
+      saveSettings({ dailyNew: v, dailyReview, isDarkMode });
+    },
+    [dailyReview, isDarkMode]
+  );
 
-  const getFamiliarity = (id: number) => familiarity[id] ?? 0;
+  const handleDailyReviewChange = useCallback(
+    (v: number) => {
+      setDailyReview(v);
+      saveSettings({ dailyNew, dailyReview: v, isDarkMode });
+    },
+    [dailyNew, isDarkMode]
+  );
 
   if (loading) {
     return (
@@ -239,13 +323,13 @@ export default function Page() {
           <StudyView
             dailyNew={dailyNew}
             dailyReview={dailyReview}
+            learnedToday={stats.learnedCount}
+            reviewedToday={stats.reviewedCount}
             currentWord={currentWord}
             isCompleted={isCompleted}
             isRevealed={isRevealed}
-            showExample={showExample}
+            onReveal={() => setIsRevealed(true)}
             onRate={handleRate}
-            onNext={handleNext}
-            onToggleExample={() => setShowExample((p) => !p)}
             cardClasses={cardClasses}
             isDarkMode={isDarkMode}
             isUpdating={updatingId === currentWord?.id}
@@ -257,8 +341,6 @@ export default function Page() {
             words={words ?? []}
             expandedWordId={expandedWordId}
             onExpand={setExpandedWordId}
-            familiarity={familiarity}
-            getFamiliarity={getFamiliarity}
             isDarkMode={isDarkMode}
           />
         )}
@@ -267,8 +349,8 @@ export default function Page() {
           <SettingsView
             dailyNew={dailyNew}
             dailyReview={dailyReview}
-            onDailyNewChange={setDailyNew}
-            onDailyReviewChange={setDailyReview}
+            onDailyNewChange={handleDailyNewChange}
+            onDailyReviewChange={handleDailyReviewChange}
             isDarkMode={isDarkMode}
           />
         )}
@@ -306,26 +388,26 @@ export default function Page() {
 function StudyView({
   dailyNew,
   dailyReview,
+  learnedToday,
+  reviewedToday,
   currentWord,
   isCompleted,
   isRevealed,
-  showExample,
+  onReveal,
   onRate,
-  onNext,
-  onToggleExample,
   cardClasses,
   isDarkMode,
   isUpdating,
 }: {
   dailyNew: number;
   dailyReview: number;
+  learnedToday: number;
+  reviewedToday: number;
   currentWord: WordItem | undefined;
   isCompleted: boolean;
   isRevealed: boolean;
-  showExample: boolean;
+  onReveal: () => void;
   onRate: (rating: "hard" | "good" | "easy") => void | Promise<void>;
-  onNext: () => void;
-  onToggleExample: () => void;
   cardClasses: string;
   isDarkMode: boolean;
   isUpdating?: boolean;
@@ -338,13 +420,13 @@ function StudyView({
         <div className="flex-1 rounded-xl p-3 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <p className="text-gray-500 dark:text-gray-400">今日新词</p>
           <p className="font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
-            0 <span className="text-gray-400">/ {dailyNew}</span>
+            {learnedToday} <span className="text-gray-400">/ {dailyNew}</span>
           </p>
         </div>
         <div className="flex-1 rounded-xl p-3 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <p className="text-gray-500 dark:text-gray-400">今日复习</p>
           <p className="font-semibold mt-0.5 text-gray-900 dark:text-gray-100">
-            0 <span className="text-gray-400">/ {dailyReview}</span>
+            {reviewedToday} <span className="text-gray-400">/ {dailyReview}</span>
           </p>
         </div>
       </div>
@@ -354,13 +436,17 @@ function StudyView({
           className={`${cardClasses} rounded-3xl shadow-xl p-12 text-center transition-opacity duration-300`}
         >
           <p className="text-2xl font-semibold">
-            🎉 今天的复习任务已全部完成！明天再来吧！
+            🎉 今天的学习任务已全部完成！明天再来吧！
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          <div
-            className={`${cardClasses} rounded-3xl shadow-xl p-10 min-h-[200px] transition-all duration-300`}
+          <button
+            type="button"
+            onClick={!isRevealed ? onReveal : undefined}
+            className={`w-full ${cardClasses} rounded-3xl shadow-xl p-10 min-h-[220px] transition-all duration-300 text-left block ${
+              !isRevealed ? "cursor-pointer hover:scale-[1.01] active:scale-[0.99]" : "cursor-default"
+            }`}
           >
             {currentWord && (
               <>
@@ -373,12 +459,12 @@ function StudyView({
                 </p>
 
                 {!isRevealed ? (
-                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                    先凭记忆选择熟悉程度，再查看释义
+                  <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
+                    点击卡片查看释义
                   </p>
                 ) : (
                   <div className="mt-6 space-y-4 transition-all duration-300">
-                    <p className={`text-3xl font-bold ${translationText}`}>
+                    <p className={`text-2xl font-bold ${translationText}`}>
                       {currentWord.translation}
                     </p>
 
@@ -386,14 +472,14 @@ function StudyView({
                       currentWord.isIrregular &&
                       currentWord.conjugations && (
                         <div
-                          className={`rounded-xl p-4 ${
+                          className={`rounded-xl p-3 ${
                             isDarkMode ? "bg-gray-700/60" : "bg-gray-100"
                           }`}
                         >
                           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
                             不规则变位
                           </p>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                             {CONJUGATION_KEYS.filter(
                               (k) => k in currentWord.conjugations!
                             ).map((key) => (
@@ -401,18 +487,10 @@ function StudyView({
                                 key={key}
                                 className="flex justify-between items-center"
                               >
-                                <span
-                                  className={
-                                    isDarkMode
-                                      ? "text-gray-400"
-                                      : "text-gray-600"
-                                  }
-                                >
+                                <span className={isDarkMode ? "text-gray-400" : "text-gray-600"}>
                                   {key}:
                                 </span>
-                                <span
-                                  className={`font-semibold ${translationText}`}
-                                >
+                                <span className={`font-semibold ${translationText}`}>
                                   {currentWord.conjugations![key]}
                                 </span>
                               </div>
@@ -422,46 +500,30 @@ function StudyView({
                       )}
 
                     {currentWord.example && (
-                      <div>
-                        {!showExample ? (
-                          <button
-                            type="button"
-                            onClick={onToggleExample}
-                            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline active:scale-[0.98] transition-transform"
-                          >
-                            查看例句 →
-                          </button>
-                        ) : (
-                          <div
-                            className={`rounded-xl p-4 ${
-                              isDarkMode ? "bg-gray-700/60" : "bg-gray-100"
-                            } space-y-2 transition-opacity duration-200`}
-                          >
-                            <p
-                              className={`text-base italic ${
-                                isDarkMode
-                                  ? "text-gray-200"
-                                  : "text-gray-800"
-                              }`}
-                            >
-                              {currentWord.example.pt}
-                            </p>
-                            <p
-                              className={`text-sm ${translationText} opacity-90`}
-                            >
-                              {currentWord.example.zh}
-                            </p>
-                          </div>
-                        )}
+                      <div
+                        className={`rounded-xl p-3 ${
+                          isDarkMode ? "bg-gray-700/60" : "bg-gray-100"
+                        } space-y-1.5`}
+                      >
+                        <p className={`text-sm italic ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
+                          {currentWord.example.pt}
+                        </p>
+                        <p className={`text-sm ${translationText} opacity-90`}>
+                          {currentWord.example.zh}
+                        </p>
                       </div>
                     )}
                   </div>
                 )}
               </>
             )}
-          </div>
+          </button>
 
           {!isRevealed ? (
+            <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+              看完释义后，下方选择掌握程度
+            </p>
+          ) : (
             <div className="flex gap-3">
               <button
                 type="button"
@@ -488,14 +550,6 @@ function StudyView({
                 认识
               </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onNext}
-              className="w-full h-14 min-h-[44px] bg-blue-600 text-white rounded-2xl font-medium transition-all duration-200 active:scale-95 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-opacity duration-200"
-            >
-              下一个
-            </button>
           )}
         </div>
       )}
@@ -507,109 +561,101 @@ function LibraryView({
   words,
   expandedWordId,
   onExpand,
-  getFamiliarity,
   isDarkMode,
 }: {
   words: WordItem[];
   expandedWordId: number | null;
   onExpand: (id: number | null) => void;
-  familiarity: Record<number, number>;
-  getFamiliarity: (id: number) => number;
   isDarkMode: boolean;
 }) {
   const itemBg = isDarkMode ? "bg-gray-800" : "bg-white";
   const itemBorder = isDarkMode ? "border-gray-700" : "border-gray-200";
   const transColor = isDarkMode ? "text-gray-300" : "text-gray-700";
-  const debugColor = isDarkMode ? "text-gray-500" : "text-gray-400";
+  const expandBg = isDarkMode ? "bg-gray-700/50" : "bg-gray-50";
 
   return (
-    <ul className="space-y-2">
-      {words.map((word) => {
-        const fam = getFamiliarity(word.id);
-        const famLabel = FAMILIARITY_LABELS[fam];
-        const famColor =
-          FAMILIARITY_COLORS[isDarkMode ? "dark" : "light"][fam];
-
-        return (
-          <li key={word.id}>
-            <button
-              type="button"
-              onClick={() =>
-                word.isVerb && word.isIrregular
-                  ? onExpand(expandedWordId === word.id ? null : word.id)
-                  : undefined
-              }
-              className={`w-full ${itemBg} rounded-2xl p-4 flex items-center justify-between text-left border ${itemBorder} transition-all duration-200 active:scale-[0.99] ${
-                word.isVerb && word.isIrregular
-                  ? "cursor-pointer"
-                  : "cursor-default"
-              }`}
-            >
-              <div className="flex flex-col items-start gap-1">
-                <span
-                  className={`text-lg font-semibold ${
-                    isDarkMode ? "text-gray-100" : "text-gray-900"
-                  }`}
-                >
-                  {word.word}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {word.isVerb ? "动词" : "名词"}
-                  </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${famColor}`}
-                  >
-                    {famLabel}
-                  </span>
-                </div>
-                <span className={`text-[10px] ${debugColor} mt-0.5`}>
-                  [间隔: {word.interval}天 | 简易度:{" "}
-                  {word.easeFactor.toFixed(1)} | 下次: {word.nextReviewDate}]
-                </span>
-              </div>
-              <span
-                className={`font-medium ${transColor} text-base ml-2`}
+    <div className="space-y-2">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        共 {words.length} 个词，点击展开查看详情
+      </p>
+      <ul className="space-y-2">
+        {words.map((word) => {
+          const isExpanded = expandedWordId === word.id;
+          return (
+            <li key={word.id}>
+              <button
+                type="button"
+                onClick={() => onExpand(isExpanded ? null : word.id)}
+                className={`w-full ${itemBg} rounded-2xl p-4 flex items-center justify-between text-left border ${itemBorder} transition-all duration-200 active:scale-[0.99] cursor-pointer`}
               >
-                {word.translation}
-              </span>
-            </button>
+                <div className="flex flex-col items-start gap-1">
+                  <span className={`text-lg font-semibold ${isDarkMode ? "text-gray-100" : "text-gray-900"}`}>
+                    {word.word}
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {word.isVerb ? "动词" : "名词"}
+                    </span>
+                    {word.interval > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        间隔 {word.interval} 天 · 下次 {word.nextReviewDate}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className={`font-medium ${transColor} text-base ml-2`}>
+                  {word.translation}
+                </span>
+                <span className="ml-2 text-gray-400 text-lg">{isExpanded ? "▲" : "▼"}</span>
+              </button>
 
-            {word.isVerb &&
-              word.isIrregular &&
-              expandedWordId === word.id &&
-              word.conjugations && (
+              {isExpanded && (
                 <div
-                  className={`mt-2 ml-4 rounded-xl p-4 ${
-                    isDarkMode ? "bg-gray-800" : "bg-gray-100"
-                  } border ${itemBorder} transition-all duration-200`}
+                  className={`mt-2 rounded-xl p-4 ${expandBg} border ${itemBorder} space-y-4`}
                 >
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    {CONJUGATION_KEYS.filter(
-                      (k) => k in word.conjugations!
-                    ).map((key) => (
-                      <div key={key} className="flex justify-between">
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {key}:
-                        </span>
-                        <span
-                          className={
-                            isDarkMode
-                              ? "text-gray-200 font-medium"
-                              : "text-gray-800 font-medium"
-                          }
-                        >
-                          {word.conjugations![key]}
-                        </span>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">释义</p>
+                    <p className={`font-semibold ${isDarkMode ? "text-gray-100" : "text-gray-900"}`}>
+                      {word.translation}
+                    </p>
+                  </div>
+
+                  {word.isVerb && word.conjugations && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">变位</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        {CONJUGATION_KEYS.filter((k) => k in word.conjugations!).map((key) => (
+                          <div key={key} className="flex justify-between">
+                            <span className="text-gray-500 dark:text-gray-400">{key}:</span>
+                            <span className={isDarkMode ? "text-gray-200 font-medium" : "text-gray-800 font-medium"}>
+                              {word.conjugations![key]}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {word.example && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">例句</p>
+                      <p className={`text-sm italic mb-1 ${isDarkMode ? "text-gray-200" : "text-gray-800"}`}>
+                        {word.example.pt}
+                      </p>
+                      <p className={`text-sm ${transColor}`}>{word.example.zh}</p>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-600">
+                    间隔 {word.interval} 天 · 简易度 {word.easeFactor.toFixed(1)} · 下次复习 {word.nextReviewDate}
                   </div>
                 </div>
               )}
-          </li>
-        );
-      })}
-    </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

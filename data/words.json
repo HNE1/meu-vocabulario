@@ -140,5 +140,379 @@
     },
     "interval": 0,
     "easeFactor": 2.5
+  },
+  {
+    "id": 9,
+    "word": "querer",
+    "translation": "想",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "quero",
+      "tu": "queres",
+      "ele/ela/você": "quer",
+      "nós": "queremos",
+      "eles/elas/vocês": "querem"
+    },
+    "example": {
+      "pt": "Quero aprender português.",
+      "zh": "我想学葡萄牙语。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 10,
+    "word": "poder",
+    "translation": "能",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "posso",
+      "tu": "podes",
+      "ele/ela/você": "pode",
+      "nós": "podemos",
+      "eles/elas/vocês": "podem"
+    },
+    "example": {
+      "pt": "Posso ajudá-lo?",
+      "zh": "我能帮你吗？"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 11,
+    "word": "ver",
+    "translation": "看",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "vejo",
+      "tu": "vês",
+      "ele/ela/você": "vê",
+      "nós": "vemos",
+      "eles/elas/vocês": "veem"
+    },
+    "example": {
+      "pt": "Não vejo nada.",
+      "zh": "我什么都看不见。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 12,
+    "word": "saber",
+    "translation": "知道",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "sei",
+      "tu": "sabes",
+      "ele/ela/você": "sabe",
+      "nós": "sabemos",
+      "eles/elas/vocês": "sabem"
+    },
+    "example": {
+      "pt": "Não sei onde fica.",
+      "zh": "我不知道在哪里。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 13,
+    "word": "dar",
+    "translation": "给",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "dou",
+      "tu": "dás",
+      "ele/ela/você": "dá",
+      "nós": "damos",
+      "eles/elas/vocês": "dão"
+    },
+    "example": {
+      "pt": "Dá-me o livro, por favor.",
+      "zh": "请把书给我。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 14,
+    "word": "comer",
+    "translation": "吃",
+    "isVerb": true,
+    "isIrregular": false,
+    "conjugations": {
+      "eu": "como",
+      "tu": "comes",
+      "ele/ela/você": "come",
+      "nós": "comemos",
+      "eles/elas/vocês": "comem"
+    },
+    "example": {
+      "pt": "Como pão ao pequeno-almoço.",
+      "zh": "我早餐吃面包。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 15,
+    "word": "beber",
+    "translation": "喝",
+    "isVerb": true,
+    "isIrregular": false,
+    "conjugations": {
+      "eu": "bebo",
+      "tu": "bebes",
+      "ele/ela/você": "bebe",
+      "nós": "bebemos",
+      "eles/elas/vocês": "bebem"
+    },
+    "example": {
+      "pt": "Bebo água todos os dias.",
+      "zh": "我每天喝水。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 16,
+    "word": "falar",
+    "translation": "说",
+    "isVerb": true,
+    "isIrregular": false,
+    "conjugations": {
+      "eu": "falo",
+      "tu": "falas",
+      "ele/ela/você": "fala",
+      "nós": "falamos",
+      "eles/elas/vocês": "falam"
+    },
+    "example": {
+      "pt": "Falo português e inglês.",
+      "zh": "我说葡萄牙语和英语。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 17,
+    "word": "estudar",
+    "translation": "学习",
+    "isVerb": true,
+    "isIrregular": false,
+    "conjugations": {
+      "eu": "estudo",
+      "tu": "estudas",
+      "ele/ela/você": "estuda",
+      "nós": "estudamos",
+      "eles/elas/vocês": "estudam"
+    },
+    "example": {
+      "pt": "Estudo português na universidade.",
+      "zh": "我在大学学葡萄牙语。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 18,
+    "word": "trabalho",
+    "translation": "工作",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "O meu trabalho é interessante.",
+      "zh": "我的工作很有意思。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 19,
+    "word": "tempo",
+    "translation": "时间",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Não tenho tempo.",
+      "zh": "我没有时间。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 20,
+    "word": "pessoa",
+    "translation": "人",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "É uma pessoa muito simpática.",
+      "zh": "她是一个很友善的人。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 21,
+    "word": "amigo",
+    "translation": "朋友",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "O meu amigo é brasileiro.",
+      "zh": "我的朋友是巴西人。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 22,
+    "word": "comida",
+    "translation": "食物",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "A comida portuguesa é deliciosa.",
+      "zh": "葡萄牙食物很好吃。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 23,
+    "word": "dia",
+    "translation": "天",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Bom dia!",
+      "zh": "早上好！"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 24,
+    "word": "noite",
+    "translation": "夜晚",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Boa noite!",
+      "zh": "晚上好！"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 25,
+    "word": "ler",
+    "translation": "读",
+    "isVerb": true,
+    "isIrregular": true,
+    "conjugations": {
+      "eu": "leio",
+      "tu": "lês",
+      "ele/ela/você": "lê",
+      "nós": "lemos",
+      "eles/elas/vocês": "leem"
+    },
+    "example": {
+      "pt": "Leio um livro por mês.",
+      "zh": "我每月读一本书。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 26,
+    "word": "escrever",
+    "translation": "写",
+    "isVerb": true,
+    "isIrregular": false,
+    "conjugations": {
+      "eu": "escrevo",
+      "tu": "escreves",
+      "ele/ela/você": "escreve",
+      "nós": "escrevemos",
+      "eles/elas/vocês": "escrevem"
+    },
+    "example": {
+      "pt": "Escrevo cartas aos meus pais.",
+      "zh": "我给父母写信。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 27,
+    "word": "família",
+    "translation": "家庭",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "A minha família vive em Lisboa.",
+      "zh": "我的家庭住在里斯本。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 28,
+    "word": "cidade",
+    "translation": "城市",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Lisboa é uma cidade bonita.",
+      "zh": "里斯本是一座美丽的城市。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 29,
+    "word": "país",
+    "translation": "国家",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "Portugal é um país pequeno.",
+      "zh": "葡萄牙是一个小国。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
+  },
+  {
+    "id": 30,
+    "word": "escola",
+    "translation": "学校",
+    "isVerb": false,
+    "isIrregular": false,
+    "conjugations": null,
+    "example": {
+      "pt": "A escola fica perto de casa.",
+      "zh": "学校在家附近。"
+    },
+    "interval": 0,
+    "easeFactor": 2.5
   }
 ]
