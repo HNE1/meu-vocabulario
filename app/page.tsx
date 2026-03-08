@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import wordsJson from "@/data/words.json";
 
 type TabType = "study" | "library" | "settings";
 
@@ -11,6 +12,7 @@ type WordItem = {
   translation: string;
   isVerb: boolean;
   isIrregular?: boolean;
+  gender?: "m" | "f";
   conjugations: Record<string, string> | null;
   example?: { pt: string; zh: string };
   interval: number;
@@ -24,6 +26,7 @@ type SupabaseWordRow = {
   word: string;
   translation: string;
   is_verb: boolean;
+  gender?: "m" | "f" | null;
   conjugations: Record<string, string> | null;
   interval: number;
   ease_factor: number;
@@ -32,6 +35,29 @@ type SupabaseWordRow = {
 };
 
 const CONJUGATION_KEYS = ["eu", "ele/ela/você", "nós", "eles/elas/vocês"] as const;
+
+function GenderBadge({ gender, isDarkMode }: { gender: "m" | "f"; isDarkMode: boolean }) {
+  if (gender === "m") {
+    return (
+      <span
+        className={`ml-2 inline-flex items-center gap-1 text-[11px] ${
+          isDarkMode ? "text-blue-400/60" : "text-blue-500/65"
+        }`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />(m.)
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`ml-2 inline-flex items-center gap-1 text-[11px] ${
+        isDarkMode ? "text-pink-400/60" : "text-pink-500/65"
+      }`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />(f.)
+    </span>
+  );
+}
 
 const TAB_TITLES: Record<TabType, string> = {
   study: "背词",
@@ -98,6 +124,39 @@ function getTodayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+type WordsJsonItem = {
+  id: number;
+  word: string;
+  translation: string;
+  isVerb: boolean;
+  isIrregular?: boolean;
+  conjugations: Record<string, string> | null;
+  example?: { pt: string; zh: string };
+  interval: number;
+  easeFactor: number;
+};
+
+async function syncWordsToSupabase(): Promise<{ ok: boolean; error?: string }> {
+  const today = getTodayStr();
+  const items = wordsJson as WordsJsonItem[];
+  const rows = items.map((item) => ({
+    id: item.id,
+    word: item.word,
+    translation: item.translation,
+    is_verb: item.isVerb,
+    is_irregular: item.isIrregular ?? false,
+    conjugations: item.conjugations,
+    example: item.example ?? null,
+    interval: item.interval,
+    ease_factor: item.easeFactor,
+    next_review_date: today,
+  }));
+
+  const { error } = await supabase.from("words").upsert(rows, { onConflict: "id" });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
@@ -112,6 +171,7 @@ function mapRowToWordItem(row: SupabaseWordRow): WordItem {
     translation: row.translation,
     isVerb: row.is_verb,
     isIrregular: row.is_verb && row.conjugations != null,
+    gender: row.gender === "m" || row.gender === "f" ? row.gender : undefined,
     conjugations: row.conjugations,
     example: row.example ?? undefined,
     interval: row.interval ?? 0,
@@ -352,6 +412,7 @@ export default function Page() {
             onDailyNewChange={handleDailyNewChange}
             onDailyReviewChange={handleDailyReviewChange}
             isDarkMode={isDarkMode}
+            onSyncWords={syncWordsToSupabase}
           />
         )}
       </main>
@@ -456,6 +517,9 @@ function StudyView({
                   }`}
                 >
                   {currentWord.word}
+                  {currentWord.gender && (
+                    <GenderBadge gender={currentWord.gender} isDarkMode={isDarkMode} />
+                  )}
                 </p>
 
                 {!isRevealed ? (
@@ -591,6 +655,7 @@ function LibraryView({
                 <div className="flex flex-col items-start gap-1">
                   <span className={`text-lg font-semibold ${isDarkMode ? "text-gray-100" : "text-gray-900"}`}>
                     {word.word}
+                    {word.gender && <GenderBadge gender={word.gender} isDarkMode={isDarkMode} />}
                   </span>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -665,13 +730,25 @@ function SettingsView({
   onDailyNewChange,
   onDailyReviewChange,
   isDarkMode,
+  onSyncWords,
 }: {
   dailyNew: number;
   dailyReview: number;
   onDailyNewChange: (v: number) => void;
   onDailyReviewChange: (v: number) => void;
   isDarkMode: boolean;
+  onSyncWords: () => Promise<{ ok: boolean; error?: string }>;
 }) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    const res = await onSyncWords();
+    setSyncing(false);
+    setSyncMsg(res.ok ? `已同步 ${(wordsJson as unknown[]).length} 个单词` : `同步失败: ${res.error}`);
+  };
   const panelBg = isDarkMode ? "bg-gray-800" : "bg-white";
   const panelBorder = isDarkMode ? "border-gray-700" : "border-gray-200";
 
@@ -730,9 +807,22 @@ function SettingsView({
         className={`rounded-2xl p-4 border ${panelBg} ${panelBorder} transition-colors duration-300`}
       >
         <p className="text-sm font-medium mb-2">词库来源</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           词库数据来自 Supabase 云端 <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">words</code> 表
         </p>
+        <button
+          type="button"
+          onClick={handleSync}
+          disabled={syncing}
+          className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-medium text-sm active:scale-[0.98] transition-all"
+        >
+          {syncing ? "同步中..." : "同步 words.json → Supabase"}
+        </button>
+        {syncMsg && (
+          <p className={`mt-2 text-xs ${syncMsg.startsWith("已") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            {syncMsg}
+          </p>
+        )}
       </div>
     </div>
   );
