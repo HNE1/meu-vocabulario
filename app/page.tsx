@@ -232,7 +232,7 @@ export default function Page() {
       const { data, error: err } = await supabase
         .from("words")
         .select("*")
-        .limit(1000)
+        .limit(5000)
         .order("id", { ascending: true });
 
       if (err) {
