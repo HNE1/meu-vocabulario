@@ -502,15 +502,23 @@ function StudyView({
         </div>
       ) : (
         <div className="space-y-4">
-          <button
-            type="button"
-            onClick={!isRevealed ? onReveal : undefined}
-            className={`w-full ${cardClasses} rounded-3xl shadow-xl p-10 min-h-[220px] transition-all duration-300 text-left block ${
-              !isRevealed ? "cursor-pointer hover:scale-[1.01] active:scale-[0.99]" : "cursor-default"
-            }`}
-          >
-            {currentWord && (
-              <>
+          <div className="relative">
+            <span
+              className={`absolute top-3 right-4 text-[11px] font-normal ${
+                isDarkMode ? "text-gray-500/70" : "text-gray-400/80"
+              }`}
+            >
+              {currentWord && (currentWord.interval === 0 ? "新学" : "复习")}
+            </span>
+            <button
+              type="button"
+              onClick={!isRevealed ? onReveal : undefined}
+              className={`w-full ${cardClasses} rounded-3xl shadow-xl p-10 min-h-[220px] transition-all duration-300 text-left block ${
+                !isRevealed ? "cursor-pointer hover:scale-[1.01] active:scale-[0.99]" : "cursor-default"
+              }`}
+            >
+              {currentWord && (
+                <>
                 <p
                   className={`text-5xl font-bold ${
                     isDarkMode ? "text-gray-100" : "text-gray-900"
@@ -579,9 +587,10 @@ function StudyView({
                     )}
                   </div>
                 )}
-              </>
-            )}
-          </button>
+                </>
+              )}
+            </button>
+          </div>
 
           {!isRevealed ? (
             <p className="text-center text-xs text-gray-500 dark:text-gray-400">
